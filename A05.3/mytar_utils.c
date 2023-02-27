@@ -138,16 +138,16 @@ unsigned long WriteFileDataBlocks(int fd_DataFile, int fd_TarFile)
 
    // write the data file (blocks of 512 bytes)
    NumWriteBytes = 0;
-   printf("Datos Escritos :");   // Traza
+   printf("Datos Escritos:");   // Traza
    memset(FileDataBlock, 0, sizeof(FileDataBlock));
    while((n=read(fd_DataFile,  FileDataBlock, sizeof(FileDataBlock))) > 0)
    {
        NumWriteBytes += write(fd_TarFile, FileDataBlock, sizeof(FileDataBlock));  // ojo!!!, no se escriben n, ni sizeof(FileDataBlock)
-       printf("--%d -", n); // Traza
+       printf(" ---%d", n); // Traza
        memset(FileDataBlock, 0, sizeof(FileDataBlock)); 
    }
    
-   printf("\n Total :Escritos %ld \n", NumWriteBytes); // Traza
+   printf("\nTotal: %ld bytes escritos\n", NumWriteBytes); // Traza
    return NumWriteBytes;
 }
 
@@ -163,7 +163,7 @@ unsigned long WriteEndTarArchive( int fd_TarFile)
    memset(end_of_archive, 0, sizeof(end_of_archive)); //podemos usar tambien END_TAR_ARCHIVE_ENTRY_SIZE
    NumWriteBytes = write(fd_TarFile, end_of_archive, sizeof(end_of_archive)); //podemos usar tambien END_TAR_ARCHIVE_ENTRY_SIZE
 
-   printf(" Escritos (End block)%d total %ld\n", n, NumWriteBytes); // Traza
+   printf(" Escritos (End block %d) total %ld\n", n, NumWriteBytes); // Traza
 
    return   NumWriteBytes;
 }
@@ -181,15 +181,6 @@ unsigned long WriteCompleteTarSize( unsigned long TarActualSize,  int fd_TarFile
    
    // complete to  multiple of 10KB size blocks
    printf("TAR_FILE_BLOCK_SIZE=%ld  TarFileSize=%ld\n", TAR_FILE_BLOCK_SIZE, NumWriteBytes); // Traza
-   /*
-    Ejemplo:
-
-        NumWriteBytes = 19740
-        Module = 19.740 % 10.240 = 9.500
-        offset = 10.240 - 9.500 = 740
-
-        queremos escribir 740 bytes
-    */
    Module = NumWriteBytes % 10240;
    offset = 10240 - Module;
 
@@ -216,86 +207,4 @@ int  VerifyCompleteTarSize( unsigned long TarActualSize)
 	}
 	return 0;
 		
-}
-	
-
-int create_mytar(char *FileName, char *TarFileName)
-{
-    unsigned long TarFileSize, n, offset;
-    ssize_t  Symlink_Size;
-
-    struct c_header_gnu_tar my_tardat;
-    char FileDataBlock[DATAFILE_BLOCK_SIZE];
-
-    int i,ret;
-
-
-    int fd_DatFile, fd_TarFile;
-    char * buffer;
-    TarFileSize = 0;
-	
-    // ------------------------------------------------------------------------
-    // (1.0) Build my_tardat structure with FileName stat info (See man 2 stat)
-
-    if ((fd_DatFile=open(FileName, O_RDONLY))== -1)
-    {
-        fprintf(stderr,"No se puede abrir el fichero de datos %s\n", FileName);
-        return ERROR_OPEN_DAT_FILE;
-    }
-
-    if ((fd_TarFile=open(TarFileName, O_WRONLY | O_CREAT | O_TRUNC,0600))== -1)
-    {
-        fprintf(stderr,"No se puede abrir el fichero tar %s\n", argv[2]);
-        close(fd_DatFile);
-        return ERROR_OPEN_TAR_FILE;
-    }
-
-
-    bzero(&my_tardat, sizeof(my_tardat));
-    ret =  BuilTarHeader(FileName, &my_tardat);
-
-    if (ret !=HEADER_OK)
-    {
-       fprintf(stderr,"No se generado bien los datos del TarHeader\n");
-       return ERROR_GENERATE_TAR_FILE;
-    }
-
-    // ----------------------------------------------------------------
-    // (1.1)Write  tar header(of FileName) to the tar file (TarFileName)
-    // To Do...
-    TarFileSize += write(fd_TarFile, &my_tardat, sizeof(my_tardat));
-    
-
-    // ----------------------------------------------------------------
-    // (1.2) write the data file (blocks of 512 bytes)
-    TarFileSize += WriteFileDataBlocks(fd_DatFile, fd_TarFile);
-    
-
-    // ----------------------------------------------------------------
-    // (2.1)Write end tar archive entry (2x512 bytes with zeros) 
-    TarFileSize +=  WriteEndTarArchive(fd_TarFile);
-
-
-    // ----------------------------------------------------------------
-    // (2.2) complete Tar file to  multiple of 10KB size block
-    TarFileSize += WriteCompleteTarSize(TarFileSize,  fd_TarFile);
-    
-
-    // -------------------------------------------------------------
-	// (3) Verify Tar file zize to  multiple of 10KB size block
-	// (ret =  VerifyCompleteTarSize( TarFileSize);
-    // ( if (ret < 0 )
-    // {
-        // fprintf(stderr,"Error al generar el fichero tar %s. Tamanio erroneo %ld\n", TarFileName, TarFileSize);
-        // close(fd_DatFile);
-        // close(fd_TarFile);
-        // return ERROR_GENERATE_TAR_FILE2;
-     // }
-	 
-	   // printf("OK: Generado el fichero tar %s (size=%ld) con el contenido del archivo %s. \n", TarFileName,    
-	                                                                                   // TarFileSize, FileName); 
-	   close(fd_DatFile);
-	   close(fd_TarFile);
-	   return 0;		// OK
-	 
 }

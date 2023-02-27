@@ -23,13 +23,10 @@
 #include <stdlib.h>
 
 #include "s_mytarheader.h"
+#include "mytar_utils.h"
 
-int BuilTarHeader(char *FileName, struct c_header_gnu_tar * pTarHeader);
-unsigned long WriteFileDataBlocks(int fd_DataFile, int fd_TarFile);
-unsigned long WriteEndTarArchive( int fd_TarFile);
-unsigned long WriteCompleteTarSize( unsigned long TarActualSize,  int fd_TarFile);
 
-int seek_last_header(int fd_mytar, char * header_buffer);
+int seek_last_header(int fd_mytar);
 
 int inserta_fichero(char * f_mytar, char * f_dat)
 {
@@ -39,7 +36,6 @@ int inserta_fichero(char * f_mytar, char * f_dat)
 
     memset(&tar_header, 0, sizeof(tar_header));
     memset(&stat_mytar, 0, sizeof(stat_mytar));
-
 
     // Open the files
     if ((fd_dat = open(f_dat, O_RDONLY)) == -1)
