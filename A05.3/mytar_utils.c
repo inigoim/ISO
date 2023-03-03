@@ -1,11 +1,10 @@
-/* *
- * * @file create_mytar.c
- * * @author G.A.
- * * @date 10/02/2023
- * * @brief First version of mytar
- * * @details  Create a tar file with only one "data file"
- * *
- * */
+/**
+ * @file mytar_utils.c
+ * @author G.A.
+ * @date 10/02/2023
+ * @brief Functions used by mytar programs
+ * @details Contains many functions used for tar file generation
+ */
 #include <unistd.h>
 #include <stdio.h>
 #include <sys/types.h>

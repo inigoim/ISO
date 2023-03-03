@@ -1,9 +1,9 @@
 /**
  * @file insertar_fichero.c
- * @author I.I., XG.C., E.F.
- * @date 24/02/2023
+ * @author XG.C., E.F, .I.I.
+ * @date 01/03/2023
  * @brief First version of inserta_fichero
- * @details  Insert a tar file in dat file
+ * @details  Insert a dat file in tar file
 */
 
 #define E_OPEN1 -1
@@ -26,11 +26,11 @@
 #include "mytar_utils.h"
 
 
-int seek_last_header(int fd_mytar);
+int seek_end_of_files(int fd_mytar);
 
 int inserta_fichero(char * f_mytar, char * f_dat)
 {
-    int fd_mytar, fd_dat;
+    int fd_mytar, fd_dat, file_number;
     struct c_header_gnu_tar tar_header;
     struct stat stat_mytar;
 
@@ -46,7 +46,8 @@ int inserta_fichero(char * f_mytar, char * f_dat)
     // Build the data_file header
     if (BuilTarHeader(f_dat, &tar_header) != HEADER_OK) return E_OPEN1;
 
-    seek_last_header(fd_mytar);
+    file_number = seek_end_of_files(fd_mytar);
+    if (file_number < 0) return file_number; // Error (E_TARFORM)
 
     // Write the header and the data
     if (write(fd_mytar, &tar_header, FILE_HEADER_SIZE) != FILE_HEADER_SIZE)
@@ -56,19 +57,25 @@ int inserta_fichero(char * f_mytar, char * f_dat)
 
     // Write the end of the tar file
     WriteEndTarArchive(fd_mytar);
-    fstat(fd_mytar, &stat_mytar);
+    fstat(fd_mytar, &stat_mytar); // Equivalent to stat(f_mytar, &stat_mytar)
     WriteCompleteTarSize(stat_mytar.st_size, fd_mytar);
 
     // Close the files
     close(fd_dat);
     close(fd_mytar);
 
-    return 0;
+    return file_number;
 }
 
 
-// Go to the last header of the tar file
-int seek_last_header(int fd_mytar) {
+/**
+ * @brief Seek the end of the files in the tar file
+ * @param fd_mytar The file descriptor of the tar file
+ * @return the number of the file to be inserted if everything went well,
+            E_TARFORM if the tar file is not well formed
+*/
+int seek_end_of_files(int fd_mytar) {
+    int file_number = 0;
     char header_buffer[FILE_HEADER_SIZE];
     memset(header_buffer, 0, DATAFILE_BLOCK_SIZE);
     while (1)
@@ -87,11 +94,12 @@ int seek_last_header(int fd_mytar) {
             lseek(fd_mytar, -DATAFILE_BLOCK_SIZE, SEEK_CUR);
             break;
         }
+        file_number++;
 
         // Advance to the next header
         int offset = file_size + (DATAFILE_BLOCK_SIZE - (file_size % DATAFILE_BLOCK_SIZE));
         lseek(fd_mytar, offset, SEEK_CUR);
     }
 
-    return 0;
+    return file_number;
 }
