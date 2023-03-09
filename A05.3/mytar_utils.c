@@ -207,3 +207,21 @@ int  VerifyCompleteTarSize( unsigned long TarActualSize)
 	return 0;
 		
 }
+
+int tar_insert_file (int fd_mytar, int fd_dat) {
+   char tar_header[FILE_HEADER_SIZE];
+   if (BuilTarHeader(f_dat, &tar_header) != HEADER_OK) return E_OPEN1;
+
+   // Write the header and the data
+   if (write(fd_mytar, &tar_header, FILE_HEADER_SIZE) != FILE_HEADER_SIZE)
+   return E_DESCO;
+   if (WriteFileDataBlocks(fd_dat, fd_mytar) < 0)
+   return E_DESCO;
+}
+
+int tar_complete_archive (int fd_mytar) {
+   struct stat stat_mytar;
+   WriteEndTarArchive(fd_mytar);
+   fstat(fd_mytar, &stat_mytar);
+   WriteCompleteTarSize(stat_mytar.st_size, fd_mytar);
+}

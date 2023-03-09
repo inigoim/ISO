@@ -43,22 +43,13 @@ int inserta_fichero(char * f_mytar, char * f_dat)
     if ((fd_mytar = open(f_mytar, (O_RDWR | O_CREAT), 0600)) == -1)
         return E_OPEN2;
 
-    // Build the data_file header
-    if (BuilTarHeader(f_dat, &tar_header) != HEADER_OK) return E_OPEN1;
 
     file_number = seek_end_of_files(fd_mytar);
     if (file_number < 0) return file_number; // Error (E_TARFORM)
 
-    // Write the header and the data
-    if (write(fd_mytar, &tar_header, FILE_HEADER_SIZE) != FILE_HEADER_SIZE)
-        return E_DESCO;
-    if (WriteFileDataBlocks(fd_dat, fd_mytar) < 0)
-        return E_DESCO;
+    tar_insert_file(fd_mytar, fd_dat);
 
-    // Write the end of the tar file
-    WriteEndTarArchive(fd_mytar);
-    fstat(fd_mytar, &stat_mytar); // Equivalent to stat(f_mytar, &stat_mytar)
-    WriteCompleteTarSize(stat_mytar.st_size, fd_mytar);
+    tar_complete_archive(int fd_mytar);
 
     // Close the files
     close(fd_dat);
