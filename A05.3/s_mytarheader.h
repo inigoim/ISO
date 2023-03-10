@@ -63,6 +63,11 @@
 #define HEADER_OK (1)
 #define HEADER_ERR (2)
 
+#define E_OPEN1 -1
+#define E_OPEN2 -2
+#define E_TARFORM -3
+#define E_DESCO -99
+
 
 struct c_header_gnu_tar {
         char name[100];             // file name

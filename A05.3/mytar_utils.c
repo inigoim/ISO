@@ -132,13 +132,17 @@ unsigned long WriteFileDataBlocks(int fd_DataFile, int fd_TarFile)
 // (2.1)Write end tar archive entry (2x512 bytes with zeros) 
 unsigned long WriteEndTarArchive( int fd_TarFile)
 {
+   int n;
    unsigned long NumWriteBytes;
 
    memset(FileDataBlock, 0, sizeof(FileDataBlock));
 
    NumWriteBytes = 0;
-   while (NumWriteBytes < END_TAR_ARCHIVE_ENTRY_SIZE)
-      NumWriteBytes +=  write(fd_TarFile, FileDataBlock, sizeof(FileDataBlock));
+   while (NumWriteBytes < END_TAR_ARCHIVE_ENTRY_SIZE) {
+      n = write(fd_TarFile, FileDataBlock, sizeof(FileDataBlock));
+      if (n < 0) return E_DESCO;
+      NumWriteBytes += n;
+   }
 
    return NumWriteBytes;
 }
@@ -166,50 +170,72 @@ unsigned long WriteCompleteTarSize( unsigned long TarCurrentSize,  int fd_TarFil
 
 int tar_insert_file (int fd_mytar, char *f_dat) {
    struct c_header_gnu_tar tar_header;
-   if (BuilTarHeader(f_dat, &tar_header) != HEADER_OK) return -1;
+   if (BuilTarHeader(f_dat, &tar_header) != HEADER_OK) return E_OPEN1;
    
    // Write the header and the data
    if (write(fd_mytar, &tar_header, FILE_HEADER_SIZE) != FILE_HEADER_SIZE)
-      return -99;
-
+      return E_DESCO;
    int fd_dat = open(f_dat, O_RDONLY);
    if (WriteFileDataBlocks(fd_dat, fd_mytar) < 0)
-      return -99;
+      return E_DESCO;
+   close(fd_dat);
 }
 
 int tar_complete_archive (int fd_mytar) {
    struct stat stat_mytar;
-   WriteEndTarArchive(fd_mytar);
-   fstat(fd_mytar, &stat_mytar);
-   WriteCompleteTarSize(stat_mytar.st_size, fd_mytar);
+   if (WriteEndTarArchive(fd_mytar) < 0) return E_DESCO;
+   if (fstat(fd_mytar, &stat_mytar) == -1) return E_DESCO;
+   if (WriteCompleteTarSize(stat_mytar.st_size, fd_mytar) == -1) return E_DESCO;
+   return 0;
 }
 
 int seek_end_of_files(int fd_mytar) {
-    int file_number = 0;
-    char header_buffer[FILE_HEADER_SIZE];
-    memset(header_buffer, 0, DATAFILE_BLOCK_SIZE);
-    while (1)
-    {
-        // Read the header
-        int read_size = read(fd_mytar, header_buffer, DATAFILE_BLOCK_SIZE);
-        if (read_size == 0) break; // In case the file is empty
-        else if (read_size != DATAFILE_BLOCK_SIZE) return E_TARFORM;
+   int file_number, current_offset;
+   char header_buffer[FILE_HEADER_SIZE];
 
-        // Read the size from the header
-        struct c_header_gnu_tar * header = (struct c_header_gnu_tar *) header_buffer;
-        int file_size = strtol(header->size, NULL, 8);
+   file_number = 1;
+   current_offset = 0;
+   memset(header_buffer, 0, DATAFILE_BLOCK_SIZE);
 
-        // If the size is 0, this is probably where the new header should go
-        if (file_size == 0) {
-            lseek(fd_mytar, -DATAFILE_BLOCK_SIZE, SEEK_CUR);
-            break;
-        }
-        file_number++;
+   while (1)
+   {
+      // Read the header
+      int read_size = read(fd_mytar, header_buffer, DATAFILE_BLOCK_SIZE);
+      if (read_size == -1) return E_OPEN2;
+      if (read_size != DATAFILE_BLOCK_SIZE) return E_TARFORM;
+      
+      // Check if the header is valid
+      struct c_header_gnu_tar * header = (struct c_header_gnu_tar *) header_buffer;
+      if (strcmp(header->magic, "ustar ") != 0) {
+         if (correct_position(current_offset, fd_mytar) && is_empty(header)) break;
+         else return E_TARFORM;
+         }
 
-        // Advance to the next header
-        int offset = file_size + (DATAFILE_BLOCK_SIZE - (file_size % DATAFILE_BLOCK_SIZE));
-        lseek(fd_mytar, offset, SEEK_CUR);
-    }
+      // Get the size of the file and advance to the next header
+      int file_size = strtol(header->size, NULL, 8);
+      int offset = file_size + (DATAFILE_BLOCK_SIZE - (file_size % DATAFILE_BLOCK_SIZE));
+      current_offset = lseek(fd_mytar, offset, SEEK_CUR);
 
-    return file_number;
+      file_number++;
+   }
+   lseek (fd_mytar, -DATAFILE_BLOCK_SIZE, SEEK_CUR);
+   return file_number;
+}
+
+// Checks if a header is empty (all bytes are 0)
+bool is_empty (struct c_header_gnu_tar * header) {
+   char *header_bytes = (char *) header;
+   for (int i = 0; i < sizeof(struct c_header_gnu_tar); i++) {
+      if (header_bytes[i] != 0) return false;
+   }
+   return true;
+}
+
+// Checks if the position is the end of the tar archive
+bool correct_position(int pos, int fd_mytar) {
+   struct stat stat_mytar;
+   fstat(fd_mytar, &stat_mytar);
+
+   return (stat_mytar.st_size - pos >= END_TAR_ARCHIVE_ENTRY_SIZE)
+      && (stat_mytar.st_size - pos <= END_TAR_ARCHIVE_ENTRY_SIZE + 1024 * 9);
 }

@@ -6,10 +6,6 @@
  * @details  Insert a dat file in tar file
 */
 
-#define E_OPEN1 -1
-#define E_OPEN2 -2
-#define E_TARFORM -3
-#define E_DESCO -99
 
 #include <unistd.h>
 #include <stdio.h>
@@ -26,25 +22,48 @@
 #include "mytar_utils.h"
 
 
-int seek_end_of_files(int fd_mytar);
-
 int inserta_fichero(char * f_mytar, char * f_dat)
 {
-    int fd_mytar, file_number;
+    int fd_mytar, file_number, res;
+    struct stat stat_mytar;
 
     // Open the tar file
-    if ((fd_mytar = open(f_mytar, (O_RDWR | O_CREAT), 0600)) == -1)
+    if ((fd_mytar = open(f_mytar, (O_RDWR | O_CREAT), 0600)) == -1) {
+        close(fd_mytar);
         return E_OPEN2;
+    }
+        
 
-    file_number = seek_end_of_files(fd_mytar);
-    if (file_number < 0) return file_number; // Error (E_TARFORM)
+    // Check that the size of the tar file is multiple of 10KB
+    fstat(fd_mytar, &stat_mytar);
+    if (stat_mytar.st_size % 10240 != 0) {
+        close(fd_mytar);
+        return E_TARFORM;
+    } 
 
-    tar_insert_file(fd_mytar, f_dat);
+    // Seek the postion where the next file should be inserted
+    if (stat_mytar.st_size != 0) {
+        file_number = seek_end_of_files(fd_mytar);
+        if (file_number < 0) {
+            close(fd_mytar);
+            return file_number;
+        }
+    }
+    else
+        file_number = 1;
 
-    tar_complete_archive(fd_mytar);
+    // Insert the file and complete the archive
+    res = tar_insert_file(fd_mytar, f_dat);
+    if (res < 0) {
+        close(fd_mytar);
+        return res;
+    }
+    res = tar_complete_archive(fd_mytar);
+    if (res < 0) {
+        close(fd_mytar);
+        return res;
+    }
 
-    // Close the file
     close(fd_mytar);
-
     return file_number;
 }
