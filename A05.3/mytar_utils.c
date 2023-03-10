@@ -183,3 +183,33 @@ int tar_complete_archive (int fd_mytar) {
    fstat(fd_mytar, &stat_mytar);
    WriteCompleteTarSize(stat_mytar.st_size, fd_mytar);
 }
+
+int seek_end_of_files(int fd_mytar) {
+    int file_number = 0;
+    char header_buffer[FILE_HEADER_SIZE];
+    memset(header_buffer, 0, DATAFILE_BLOCK_SIZE);
+    while (1)
+    {
+        // Read the header
+        int read_size = read(fd_mytar, header_buffer, DATAFILE_BLOCK_SIZE);
+        if (read_size == 0) break; // In case the file is empty
+        else if (read_size != DATAFILE_BLOCK_SIZE) return E_TARFORM;
+
+        // Read the size from the header
+        struct c_header_gnu_tar * header = (struct c_header_gnu_tar *) header_buffer;
+        int file_size = strtol(header->size, NULL, 8);
+
+        // If the size is 0, this is probably where the new header should go
+        if (file_size == 0) {
+            lseek(fd_mytar, -DATAFILE_BLOCK_SIZE, SEEK_CUR);
+            break;
+        }
+        file_number++;
+
+        // Advance to the next header
+        int offset = file_size + (DATAFILE_BLOCK_SIZE - (file_size % DATAFILE_BLOCK_SIZE));
+        lseek(fd_mytar, offset, SEEK_CUR);
+    }
+
+    return file_number;
+}
