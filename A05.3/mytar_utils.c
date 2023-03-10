@@ -19,22 +19,6 @@
 #include "s_mytarheader.h"
 
 
-// #define ERROR_OPEN_DAT_FILE (2)
-// #define ERROR_OPEN_TAR_FILE (3)
-// #define ERROR_GENERATE_TAR_FILE (4)
-// #define ERROR_GENERATE_TAR_FILE2 (5)
-
-
-// #define HEADER_OK (1)
-// #define HEADER_ERR (2)
-
-// #define FILE_HEADER_SIZE     512
-// #define DATAFILE_BLOCK_SIZE  512
-// #define END_TAR_ARCHIVE_ENTRY_SIZE  (512*2)
-// #define TAR_FILE_BLOCK_SIZE  ((unsigned long) (DATAFILE_BLOCK_SIZE*20))
-
-struct passwd *pws;
-struct group  *grp;
 
 char FileDataBlock[DATAFILE_BLOCK_SIZE];
 
@@ -42,27 +26,25 @@ char FileDataBlock[DATAFILE_BLOCK_SIZE];
 // Return UserName (string) from uid (integer). See man 2 stat and man getpwuid 
 char * getUserName(uid_t uid)
 {
-   pws = getpwuid(uid);
-       return pws->pw_name;
+   return getpwuid(uid)->pw_name;
 }
 
 //------------------------------------------------------------------------------
 // Return GroupName (string) from gid (integer). See man 2 stat and man getgrgid   
 char * getGroupName(gid_t gid)
 {
-   grp = getgrgid(gid);
-       return grp->gr_name;
+   return getgrgid(gid)->gr_name;
 }
 
 //----------------------------------------
 // Return Mode type entry  (tar Mode type)
 char mode_tar( mode_t Mode)
 {
-   if  (S_ISREG(Mode))  return  '0';
-   if  (S_ISLNK(Mode))  return  '2';
-   if  (S_ISCHR(Mode))  return  '3';
-   if  (S_ISBLK(Mode))  return  '4';
-   if  (S_ISDIR(Mode))  return  '5';
+   if  (S_ISREG(Mode))   return  '0';
+   if  (S_ISLNK(Mode))   return  '2';
+   if  (S_ISCHR(Mode))   return  '3';
+   if  (S_ISBLK(Mode))   return  '4';
+   if  (S_ISDIR(Mode))   return  '5';
    if  (S_ISFIFO(Mode))  return  '6';
    if  (S_ISSOCK(Mode))  return  '7';
    return '0';
@@ -75,12 +57,11 @@ int BuilTarHeader(char *FileName, struct c_header_gnu_tar *pTarHeader)
 {
    struct stat  stat_file;
 
-   ssize_t  Symlink_Size;
-   int n, i;
+   int i;
    char  *pTarHeaderBytes;
    unsigned int  Checksum;
 
-   bzero(pTarHeader, sizeof(struct c_header_gnu_tar));
+   memset(pTarHeader, 0, sizeof(struct c_header_gnu_tar));
 
    if (stat (FileName, &stat_file) == -1)  return HEADER_ERR;
 
@@ -91,15 +72,14 @@ int BuilTarHeader(char *FileName, struct c_header_gnu_tar *pTarHeader)
    sprintf(pTarHeader->gid, "%07o", stat_file.st_gid);
    sprintf(pTarHeader->size, "%011lo", stat_file.st_size);
    sprintf(pTarHeader->mtime, "%011lo", stat_file.st_mtime);
-   // checksum  the last     sprintf(pTarHeader->checksum, "%06o", Checksum);
 
    pTarHeader->typeflag[0] = mode_tar(stat_file.st_mode);
 
     //  linkname
    if  (S_ISLNK(stat_file.st_mode))
-        Symlink_Size = readlink(FileName,pTarHeader->linkname,100);
+      readlink(FileName, pTarHeader->linkname, 100);
 
-   strncpy(pTarHeader->magic, "ustar ",6);  // "ustar" followed by a space (without null char)
+   strcpy(pTarHeader->magic, "ustar ");  // "ustar" followed by a space (without null char)
    strcpy(pTarHeader->version, " ");  //   space character followed by a null char.
    strcpy(pTarHeader->uname, getUserName(stat_file.st_uid));
    strcpy(pTarHeader->gname, getGroupName(stat_file.st_gid));
@@ -116,11 +96,11 @@ int BuilTarHeader(char *FileName, struct c_header_gnu_tar *pTarHeader)
      //  pad (not used)
 
    // compute checksum (the last)
-   memset(pTarHeader->checksum, ' ', 8);   // Initialize to blanc spaces
+   memset(pTarHeader->checksum, ' ', sizeof(pTarHeader->checksum));   // Initialize to blanc spaces
    pTarHeaderBytes = (unsigned char *) pTarHeader;
 
-   for (i=0,Checksum=0 ; i < sizeof(struct c_header_gnu_tar); i++)
-          Checksum = Checksum + pTarHeaderBytes[i];
+   for (i=0, Checksum=0 ; i < sizeof(struct c_header_gnu_tar); i++)
+          Checksum += pTarHeaderBytes[i];
 
    sprintf(pTarHeader->checksum, "%06o", Checksum);    // six octal digits followed by a null and a space character
 
@@ -137,16 +117,14 @@ unsigned long WriteFileDataBlocks(int fd_DataFile, int fd_TarFile)
 
    // write the data file (blocks of 512 bytes)
    NumWriteBytes = 0;
-   printf("Datos Escritos:");   // Traza
    memset(FileDataBlock, 0, sizeof(FileDataBlock));
-   while((n=read(fd_DataFile,  FileDataBlock, sizeof(FileDataBlock))) > 0)
+   while((n=read(fd_DataFile, FileDataBlock, sizeof(FileDataBlock))) > 0)
    {
        NumWriteBytes += write(fd_TarFile, FileDataBlock, sizeof(FileDataBlock));  // ojo!!!, no se escriben n, ni sizeof(FileDataBlock)
-       printf(" ---%d", n); // Traza
        memset(FileDataBlock, 0, sizeof(FileDataBlock)); 
    }
    
-   printf("\nTotal: %ld bytes escritos\n", NumWriteBytes); // Traza
+   printf("Total: %ld bytes escritos\n", NumWriteBytes); // Traza
    return NumWriteBytes;
 }
 
@@ -155,68 +133,48 @@ unsigned long WriteFileDataBlocks(int fd_DataFile, int fd_TarFile)
 unsigned long WriteEndTarArchive( int fd_TarFile)
 {
    unsigned long NumWriteBytes;
-   int n;
-   char end_of_archive[END_TAR_ARCHIVE_ENTRY_SIZE];
+
+   memset(FileDataBlock, 0, sizeof(FileDataBlock));
 
    NumWriteBytes = 0;
-   memset(end_of_archive, 0, sizeof(end_of_archive)); //podemos usar tambien END_TAR_ARCHIVE_ENTRY_SIZE
-   NumWriteBytes = write(fd_TarFile, end_of_archive, sizeof(end_of_archive)); //podemos usar tambien END_TAR_ARCHIVE_ENTRY_SIZE
+   while (NumWriteBytes < END_TAR_ARCHIVE_ENTRY_SIZE)
+      NumWriteBytes +=  write(fd_TarFile, FileDataBlock, sizeof(FileDataBlock));
 
-   printf(" Escritos (End block %d) total %ld\n", n, NumWriteBytes); // Traza
-
-   return   NumWriteBytes;
+   return NumWriteBytes;
 }
 
 // ----------------------------------------------------------------
 // (2.2) complete Tar file to  multiple of 10KB size block
-unsigned long WriteCompleteTarSize( unsigned long TarActualSize,  int fd_TarFile)
+unsigned long WriteCompleteTarSize( unsigned long TarCurrentSize,  int fd_TarFile)
 {
    unsigned long NumWriteBytes;
-   unsigned long Module, offset;
-   int n;
-   char * buffer;
-   
-   NumWriteBytes = TarActualSize;
+   unsigned long module, offset;
    
    // complete to  multiple of 10KB size blocks
-   printf("TAR_FILE_BLOCK_SIZE=%ld  TarFileSize=%ld\n", TAR_FILE_BLOCK_SIZE, NumWriteBytes); // Traza
-   Module = NumWriteBytes % 10240;
-   offset = 10240 - Module;
-
-   if(Module!=0){
+   NumWriteBytes = 0;
+   module = TarCurrentSize % 10240;
+   offset = 10240 - module;
+   if(module != 0){
     char padding[offset];
     memset(padding, 0, sizeof(padding));
     NumWriteBytes = write(fd_TarFile, padding, sizeof(padding));
    }
-  
-   printf("OK: Generado el EndTarBlocks del archivo tar %ld bytes \n", NumWriteBytes); // Traza
 
-   return offset;
+   return NumWriteBytes;
 }
 
-// Verify Tar file zize to  multiple of 10KB size blocks
-int  VerifyCompleteTarSize( unsigned long TarActualSize)
-{
 
-	 // Verify
-	if ((TarActualSize % TAR_FILE_BLOCK_SIZE) != 0)
-	{
-		fprintf(stderr,"Error al generar el fichero tar. Tamanio erroneo %ld\n", TarActualSize);
-		return ERROR_GENERATE_TAR_FILE2;
-	}
-	return 0;
-		
-}
-
-int tar_insert_file (int fd_mytar, int fd_dat) {
-   char tar_header[FILE_HEADER_SIZE];
-   if (BuilTarHeader(f_dat, &tar_header) != HEADER_OK) return E_OPEN1;
-
+int tar_insert_file (int fd_mytar, char *f_dat) {
+   struct c_header_gnu_tar tar_header;
+   if (BuilTarHeader(f_dat, &tar_header) != HEADER_OK) return -1;
+   
    // Write the header and the data
    if (write(fd_mytar, &tar_header, FILE_HEADER_SIZE) != FILE_HEADER_SIZE)
-   return E_DESCO;
+      return -99;
+
+   int fd_dat = open(f_dat, O_RDONLY);
    if (WriteFileDataBlocks(fd_dat, fd_mytar) < 0)
-   return E_DESCO;
+      return -99;
 }
 
 int tar_complete_archive (int fd_mytar) {

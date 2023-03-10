@@ -30,7 +30,7 @@ int seek_end_of_files(int fd_mytar);
 
 int inserta_fichero(char * f_mytar, char * f_dat)
 {
-    int fd_mytar, fd_dat, file_number;
+    int fd_mytar, file_number;
     struct c_header_gnu_tar tar_header;
     struct stat stat_mytar;
 
@@ -38,8 +38,6 @@ int inserta_fichero(char * f_mytar, char * f_dat)
     memset(&stat_mytar, 0, sizeof(stat_mytar));
 
     // Open the files
-    if ((fd_dat = open(f_dat, O_RDONLY)) == -1)
-        return E_OPEN1;
     if ((fd_mytar = open(f_mytar, (O_RDWR | O_CREAT), 0600)) == -1)
         return E_OPEN2;
 
@@ -47,12 +45,11 @@ int inserta_fichero(char * f_mytar, char * f_dat)
     file_number = seek_end_of_files(fd_mytar);
     if (file_number < 0) return file_number; // Error (E_TARFORM)
 
-    tar_insert_file(fd_mytar, fd_dat);
+    tar_insert_file(fd_mytar, f_dat);
 
-    tar_complete_archive(int fd_mytar);
+    tar_complete_archive(fd_mytar);
 
-    // Close the files
-    close(fd_dat);
+    // Close the file
     close(fd_mytar);
 
     return file_number;
