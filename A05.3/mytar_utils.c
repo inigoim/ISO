@@ -15,6 +15,7 @@
 #include <strings.h>
 #include <string.h>
 #include <stdlib.h>
+#include <stdbool.h>
 
 #include "s_mytarheader.h"
 
@@ -79,7 +80,7 @@ int BuilTarHeader(char *FileName, struct c_header_gnu_tar *pTarHeader)
    if  (S_ISLNK(stat_file.st_mode))
       readlink(FileName, pTarHeader->linkname, 100);
 
-   strcpy(pTarHeader->magic, "ustar ");  // "ustar" followed by a space (without null char)
+   memcpy(pTarHeader->magic, "ustar ", 6);  // "ustar" followed by a space (without null char)
    strcpy(pTarHeader->version, " ");  //   space character followed by a null char.
    strcpy(pTarHeader->uname, getUserName(stat_file.st_uid));
    strcpy(pTarHeader->gname, getGroupName(stat_file.st_gid));
@@ -189,6 +190,27 @@ int tar_complete_archive (int fd_mytar) {
    return 0;
 }
 
+// Checks if a header is empty (all bytes are 0)
+bool is_empty (struct c_header_gnu_tar * header) {
+   char *header_bytes = (char *) header;
+   int i;
+   for (i = 0; i < sizeof(struct c_header_gnu_tar); i++) {
+      if (header_bytes[i] != 0) return false;
+   }
+   return true;
+}
+
+// Checks if the position is the end of the tar archive
+bool correct_position(int pos, int fd_mytar) {
+   struct stat stat_mytar;
+   fstat(fd_mytar, &stat_mytar);
+   int remaining = stat_mytar.st_size - pos;
+   if (remaining >= END_TAR_ARCHIVE_ENTRY_SIZE && remaining <= (END_TAR_ARCHIVE_ENTRY_SIZE + 512 * 9)) {
+      return true;
+   }
+   return false;
+}
+
 int seek_end_of_files(int fd_mytar) {
    int file_number, current_offset;
    char header_buffer[FILE_HEADER_SIZE];
@@ -203,10 +225,11 @@ int seek_end_of_files(int fd_mytar) {
       int read_size = read(fd_mytar, header_buffer, DATAFILE_BLOCK_SIZE);
       if (read_size == -1) return E_OPEN2;
       if (read_size != DATAFILE_BLOCK_SIZE) return E_TARFORM;
+      current_offset += read_size;
       
       // Check if the header is valid
       struct c_header_gnu_tar * header = (struct c_header_gnu_tar *) header_buffer;
-      if (strcmp(header->magic, "ustar ") != 0) {
+      if (memcmp(header->magic, "ustar ", 6) != 0) {
          if (correct_position(current_offset, fd_mytar) && is_empty(header)) break;
          else return E_TARFORM;
          }
@@ -220,22 +243,4 @@ int seek_end_of_files(int fd_mytar) {
    }
    lseek (fd_mytar, -DATAFILE_BLOCK_SIZE, SEEK_CUR);
    return file_number;
-}
-
-// Checks if a header is empty (all bytes are 0)
-bool is_empty (struct c_header_gnu_tar * header) {
-   char *header_bytes = (char *) header;
-   for (int i = 0; i < sizeof(struct c_header_gnu_tar); i++) {
-      if (header_bytes[i] != 0) return false;
-   }
-   return true;
-}
-
-// Checks if the position is the end of the tar archive
-bool correct_position(int pos, int fd_mytar) {
-   struct stat stat_mytar;
-   fstat(fd_mytar, &stat_mytar);
-
-   return (stat_mytar.st_size - pos >= END_TAR_ARCHIVE_ENTRY_SIZE)
-      && (stat_mytar.st_size - pos <= END_TAR_ARCHIVE_ENTRY_SIZE + 1024 * 9);
 }
