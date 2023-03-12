@@ -65,7 +65,10 @@
 
 #define E_OPEN1 -1
 #define E_OPEN2 -2
+#define E_OPEN -1
+#define E_NOEXIST -2
 #define E_TARFORM -3
+#define E_CREATDEST -4
 #define E_DESCO -99
 
 

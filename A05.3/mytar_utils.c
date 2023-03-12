@@ -77,7 +77,7 @@ int BuilTarHeader(char *FileName, struct c_header_gnu_tar *pTarHeader)
    pTarHeader->typeflag[0] = mode_tar(stat_file.st_mode);
 
     //  linkname
-   if  (S_ISLNK(stat_file.st_mode))
+   if (S_ISLNK(stat_file.st_mode))
       readlink(FileName, pTarHeader->linkname, 100);
 
    memcpy(pTarHeader->magic, "ustar ", 6);  // "ustar" followed by a space (without null char)
@@ -119,13 +119,15 @@ unsigned long WriteFileDataBlocks(int fd_DataFile, int fd_TarFile)
    // write the data file (blocks of 512 bytes)
    NumWriteBytes = 0;
    memset(FileDataBlock, 0, sizeof(FileDataBlock));
+   printf("Datos Escritos: ");   // Traza
    while((n=read(fd_DataFile, FileDataBlock, sizeof(FileDataBlock))) > 0)
    {
        NumWriteBytes += write(fd_TarFile, FileDataBlock, sizeof(FileDataBlock));  // ojo!!!, no se escriben n, ni sizeof(FileDataBlock)
-       memset(FileDataBlock, 0, sizeof(FileDataBlock)); 
+       memset(FileDataBlock, 0, sizeof(FileDataBlock));
+       printf("---%d ", n);
    }
    
-   printf("Total: %ld bytes escritos\n", NumWriteBytes); // Traza
+   printf("\nTotal: Escritos %ld bytes\n", NumWriteBytes); // Traza
    return NumWriteBytes;
 }
 
@@ -145,6 +147,7 @@ unsigned long WriteEndTarArchive( int fd_TarFile)
       NumWriteBytes += n;
    }
 
+   printf("Escritos (End block) %ld bytes\n", NumWriteBytes); // Traza
    return NumWriteBytes;
 }
 
@@ -155,6 +158,7 @@ unsigned long WriteCompleteTarSize( unsigned long TarCurrentSize,  int fd_TarFil
    unsigned long NumWriteBytes;
    unsigned long module, offset;
    
+   printf("TAR_FILE_BLOCK_SIZE=%ld  TarFileSize=%ld\n", TAR_FILE_BLOCK_SIZE, TarCurrentSize); // Traza
    // complete to  multiple of 10KB size blocks
    NumWriteBytes = 0;
    module = TarCurrentSize % 10240;
@@ -164,6 +168,7 @@ unsigned long WriteCompleteTarSize( unsigned long TarCurrentSize,  int fd_TarFil
     memset(padding, 0, sizeof(padding));
     NumWriteBytes = write(fd_TarFile, padding, sizeof(padding));
    }
+   printf("OK: Generado el EndTarBlocks del archivo tar %ld bytes\n", NumWriteBytes); // Traza
 
    return NumWriteBytes;
 }
@@ -211,13 +216,13 @@ bool correct_position(int pos, int fd_mytar) {
    return false;
 }
 
+// Seeks the end of the tar archive
 int seek_end_of_files(int fd_mytar) {
    int file_number, current_offset;
    char header_buffer[FILE_HEADER_SIZE];
 
    file_number = 1;
    current_offset = 0;
-   memset(header_buffer, 0, DATAFILE_BLOCK_SIZE);
 
    while (1)
    {
@@ -243,4 +248,47 @@ int seek_end_of_files(int fd_mytar) {
    }
    lseek (fd_mytar, -DATAFILE_BLOCK_SIZE, SEEK_CUR);
    return file_number;
+}
+
+// Extract the file (the file offset has to be at the beginning of the data)
+int extract_file(int fd_mytar, struct c_header_gnu_tar *header) {
+    char data_buff[header->size];
+    char file_name[100];
+    strcpy(file_name, header->name);
+
+    int fd_output = create(file_name, 0600);
+    if(fd_output < 0) return E_CREATDEST;
+    rd = read(fd_mytar, data_buff, header->size);
+    if (rd == -1) return E_DESCO;
+    if (rd < header->size) return E_TARFORM;
+    if(write(fd_output, data_buff, header->size) < header->size) return E_DESCO;
+
+    return file_name;
+}
+
+int search_file (int fd_mytar, char * f_dat){
+
+   char header_buffer[FILE_HEADER_SIZE];
+
+    while (1)
+    {   
+        // Read the header
+        int read_size = read(fd_mytar, header_buffer, FILE_HEADER_SIZE);
+        if (read_size == -1) return E_OPEN2;
+        if (read_size != DATAFILE_BLOCK_SIZE) return E_TARFORM;
+        
+        // Check if the header has the name of the file to extract
+        struct c_header_gnu_tar * header = (struct c_header_gnu_tar *) header_buffer;
+        if (strcmp(header->name, f_dat) == 0) {
+            lseek(fd_mytar, -FILE_HEADER_SIZE, SEEK_CUR);
+            extract_file(fd_mytar, header);
+            break;
+        }
+
+        // Get the size of the file and advance to the next header
+        int file_size = strtol(header->size, NULL, 8);
+        int offset = file_size + (DATAFILE_BLOCK_SIZE - (file_size % DATAFILE_BLOCK_SIZE));
+        lseek(fd_mytar, offset, SEEK_CUR);
+    }
+    return 0;
 }

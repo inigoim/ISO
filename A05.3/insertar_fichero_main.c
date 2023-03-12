@@ -8,7 +8,7 @@
 #include <stdio.h>
 #include <stdlib.h>
 
-#include "inserta_fichero.h"
+int inserta_fichero(char * f_mytar, char * f_dat);
 
 int main(int argc, char *argv[]){
     int res;
@@ -19,6 +19,6 @@ int main(int argc, char *argv[]){
     }
 
    res = inserta_fichero(argv[1], argv[2]);
-   printf("Resultado: %d\n", res);
+   printf("inserta_fichero = %d\n", res);
    exit(0);
 }

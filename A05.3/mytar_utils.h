@@ -12,3 +12,19 @@ int tar_complete_archive(int fd_mytar);
             E_TARFORM if the tar file is not well formed
 */
 int seek_end_of_files(int fd_mytar);
+
+/**
+* @brief
+* @param fd_mytar The file descriptor of the tar file
+* @param header Pointer to the header
+* @return 
+*/
+int extract_file(int fd_mytar, struct c_header_gnu_tar *header);
+
+/**
+* @brief Look for the file with the name "f_dat" in the tar file
+* @param fd_mytar The file descriptor of the tar file
+* @param f_dat Pointer to the name of the file 
+* @return 0 if the file was found, in other cases it will return the number of error
+*/
+int search_file (int fd_mytar, char * f_dat);

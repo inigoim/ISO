@@ -21,7 +21,12 @@
 #include "s_mytarheader.h"
 #include "mytar_utils.h"
 
-
+/**
+ * @brief Insert a file in a tar file
+ * @param f_mytar The tar file
+ * @param f_dat The file to insert
+ * @return 0 if everything went well, an error code otherwise
+ */
 int inserta_fichero(char * f_mytar, char * f_dat)
 {
     int fd_mytar, file_number, res;
@@ -29,10 +34,8 @@ int inserta_fichero(char * f_mytar, char * f_dat)
 
     // Open the tar file
     if ((fd_mytar = open(f_mytar, (O_RDWR | O_CREAT), 0600)) == -1) {
-        close(fd_mytar);
         return E_OPEN2;
     }
-        
 
     // Check that the size of the tar file is multiple of 10KB
     fstat(fd_mytar, &stat_mytar);
