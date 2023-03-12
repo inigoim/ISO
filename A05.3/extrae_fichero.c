@@ -32,20 +32,21 @@ int extrae_fichero(char * f_mytar, char * f_dat) {
 
     //The tar file doesn't have the correct format
     fstat(fd_mytar, &stat_mytar);
-    if(stat_mytar.st_size % 1024 != 0)
+    if(stat_mytar.st_size % 10240 != 0)
     {
         close(fd_mytar);
         return E_TARFORM;
     }
 
     //f_dat doesn't exist in the tar file
-    if (search_file != 0){
+    if (search_file(fd_mytar, f_dat) != 0){
         close(fd_mytar);
         return E_NOEXIST;
     }
 
     //f_dat exists in the tar file
     if (extract_file(fd_mytar,  (struct c_header_gnu_tar *) header_buffer) == 0){
+        // header_buffer doesnt contain anything???
         close (fd_mytar);
         return 0;
     }

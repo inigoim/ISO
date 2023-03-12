@@ -281,7 +281,6 @@ int search_file (int fd_mytar, char * f_dat){
         struct c_header_gnu_tar * header = (struct c_header_gnu_tar *) header_buffer;
         if (strcmp(header->name, f_dat) == 0) {
             lseek(fd_mytar, -FILE_HEADER_SIZE, SEEK_CUR);
-            extract_file(fd_mytar, header);
             break;
         }
 
