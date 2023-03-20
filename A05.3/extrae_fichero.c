@@ -19,41 +19,41 @@
 #include "mytar_utils.h"
 
 int extrae_fichero(char * f_mytar, char * f_dat) {
-    int fd_mytar;
+    int fd_mytar, res;
     struct stat stat_mytar;
-
-    
     char header_buffer[FILE_HEADER_SIZE];
+
 
     fd_mytar = open(f_mytar, O_RDONLY);
     
-    //The tar file doesn't exist
-    if (fd_mytar==-1) return E_OPEN;
+    // If there is an error opening the tar file, throw an error
+    if (fd_mytar == -1) return E_OPEN;
 
-    //The tar file doesn't have the correct format
+    // Check the tar file format
     fstat(fd_mytar, &stat_mytar);
-    if(stat_mytar.st_size % 1024 != 0)
+    if(stat_mytar.st_size % 10240 != 0)
     {
         close(fd_mytar);
         return E_TARFORM;
     }
 
-    //f_dat doesn't exist in the tar file
-    if (search_file != 0){
+    // Search f_dat in the tar file
+    res = search_file(fd_mytar, f_dat);
+    if (res < 0)
+    {
         close(fd_mytar);
-        return E_NOEXIST;
+        return res;
     }
 
-    //f_dat exists in the tar file
-    if (extract_file(fd_mytar,  (struct c_header_gnu_tar *) header_buffer) == 0){
+    // Extract the file from the tar
+    res = extract_file(fd_mytar);
+    if (res < 0)
+    {
         close (fd_mytar);
-        return 0;
+        return res;
     }
 
-    //another type of errors
-    else {
-        close(fd_mytar);
-        return E_DESCO;
-    }
-   
+    close(fd_mytar);
+    return 0;
+
 }

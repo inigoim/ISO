@@ -19,7 +19,7 @@ int seek_end_of_files(int fd_mytar);
 * @param header Pointer to the header
 * @return 
 */
-int extract_file(int fd_mytar, struct c_header_gnu_tar *header);
+int extract_file(int fd_mytar);
 
 /**
 * @brief Look for the file with the name "f_dat" in the tar file

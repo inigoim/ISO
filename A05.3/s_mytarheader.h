@@ -63,12 +63,30 @@
 #define HEADER_OK (1)
 #define HEADER_ERR (2)
 
+
+// Errores de inserta_fichero:
+
+// No se puede abrir f_dat
 #define E_OPEN1 -1
+// No se puede abrir o crear f_mytar
 #define E_OPEN2 -2
-#define E_OPEN -1
-#define E_NOEXIST -2
+// f_dat no tiene el formato de gnu tar
 #define E_TARFORM -3
+// Otro tipo de errores
+#define E_DESCO -99
+
+
+// Errores de extrae_fichero:
+
+// No se puede abrir f_mytar
+#define E_OPEN -1
+// f_mytar no tiene el formato de gnu tar
+#define E_TARFORM -3
+// f_mytar no contiene el fichero de nombre f_dat
+#define E_NOEXIST -2
+// No se puede crear/extraer el fichero f_dat
 #define E_CREATDEST -4
+// Otro tipo de errores
 #define E_DESCO -99
 
 

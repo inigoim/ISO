@@ -24,7 +24,7 @@
 char FileDataBlock[DATAFILE_BLOCK_SIZE];
 
 //-----------------------------------------------------------------------------
-// Return UserName (string) from uid (integer). See man 2 stat and man getpwuid 
+// Return UserName (string) from uid (integer). See man 2 stat and man getpwuid
 char * getUserName(uid_t uid)
 {
    return getpwuid(uid)->pw_name;
@@ -51,9 +51,12 @@ char mode_tar( mode_t Mode)
    return '0';
 }
 
-
-// ------------------------------------------------------------------------
-// (1.0) Build my_tardat structure with FileName stat info (See man 2 stat)
+/**
+* Build my_tardat structure with FileName stat info (See man 2 stat)
+* @param FileName File name to be added to the tar file
+* @param pTarHeader Pointer to the structure to be filled
+* @return HEADER_OK if OK, HEADER_ERR if error
+*/
 int BuilTarHeader(char *FileName, struct c_header_gnu_tar *pTarHeader)
 {
    struct stat  stat_file;
@@ -133,6 +136,7 @@ unsigned long WriteFileDataBlocks(int fd_DataFile, int fd_TarFile)
 
 // ----------------------------------------------------------------
 // (2.1)Write end tar archive entry (2x512 bytes with zeros) 
+
 unsigned long WriteEndTarArchive( int fd_TarFile)
 {
    int n;
@@ -151,8 +155,12 @@ unsigned long WriteEndTarArchive( int fd_TarFile)
    return NumWriteBytes;
 }
 
-// ----------------------------------------------------------------
-// (2.2) complete Tar file to  multiple of 10KB size block
+/**
+ * complete Tar file to  multiple of 10KB size block
+ * @param TarCurrentSize Tar file size in bytes
+ * @param fd_TarFile Tar file descriptor
+ * @return unsigned long Number of bytes written 
+ */
 unsigned long WriteCompleteTarSize( unsigned long TarCurrentSize,  int fd_TarFile)
 {
    unsigned long NumWriteBytes;
@@ -174,6 +182,12 @@ unsigned long WriteCompleteTarSize( unsigned long TarCurrentSize,  int fd_TarFil
 }
 
 
+/**
+* Inserts a file in the tar archive
+* @param fd_mytar File descriptor of the tar archive
+* @param f_dat File to insert in the tar archive
+* @return 0 if the file was inserted successfully, an error code otherwise
+*/
 int tar_insert_file (int fd_mytar, char *f_dat) {
    struct c_header_gnu_tar tar_header;
    if (BuilTarHeader(f_dat, &tar_header) != HEADER_OK) return E_OPEN1;
@@ -187,6 +201,11 @@ int tar_insert_file (int fd_mytar, char *f_dat) {
    close(fd_dat);
 }
 
+/**
+* Completes the tar archive by writing the end of archive entry and the size of the archive
+* @param fd_mytar File descriptor of the tar archive
+* @return 0 if the archive was completed successfully, an error code otherwise
+*/
 int tar_complete_archive (int fd_mytar) {
    struct stat stat_mytar;
    if (WriteEndTarArchive(fd_mytar) < 0) return E_DESCO;
@@ -195,7 +214,11 @@ int tar_complete_archive (int fd_mytar) {
    return 0;
 }
 
-// Checks if a header is empty (all bytes are 0)
+/**
+* Checks if a header is empty (all bytes are 0)
+* @param header Header to check
+* @return true if the header is empty, false otherwise
+*/
 bool is_empty (struct c_header_gnu_tar * header) {
    char *header_bytes = (char *) header;
    int i;
@@ -205,7 +228,12 @@ bool is_empty (struct c_header_gnu_tar * header) {
    return true;
 }
 
-// Checks if the position is the end of the tar archive
+/**
+* Checks if the position is the end of the tar archive
+* @param pos Position to check
+* @param fd_mytar File descriptor of the tar archive
+* @return true if the pos is inside the end of the tar archive, false otherwise
+*/
 bool correct_position(int pos, int fd_mytar) {
    struct stat stat_mytar;
    fstat(fd_mytar, &stat_mytar);
@@ -216,7 +244,11 @@ bool correct_position(int pos, int fd_mytar) {
    return false;
 }
 
-// Seeks the end of the tar archive
+/** 
+ * Seeks the end of the tar archive
+ * @param fd_mytar File descriptor of the tar archive
+ * @return 0 if the end of the archive was found, an error code otherwise
+ */
 int seek_end_of_files(int fd_mytar) {
    int file_number, current_offset;
    char header_buffer[FILE_HEADER_SIZE];
@@ -250,45 +282,84 @@ int seek_end_of_files(int fd_mytar) {
    return file_number;
 }
 
-// Extract the file (the file offset has to be at the beginning of the data)
-int extract_file(int fd_mytar, struct c_header_gnu_tar *header) {
-    char data_buff[header->size];
-    char file_name[100];
-    strcpy(file_name, header->name);
+/**
+* Extract the file (the file offset has to be at the beginning of the file header)
+* @param fd_mytar file descriptor of the tar archive
+* @return 0 if the file is correctly extracted, the respective error otherwise
+*/
+int extract_file(int fd_mytar) {
+   struct c_header_gnu_tar header;
 
-    int fd_output = create(file_name, 0600);
-    if(fd_output < 0) return E_CREATDEST;
-    rd = read(fd_mytar, data_buff, header->size);
-    if (rd == -1) return E_DESCO;
-    if (rd < header->size) return E_TARFORM;
-    if(write(fd_output, data_buff, header->size) < header->size) return E_DESCO;
 
-    return file_name;
+   if (read(fd_mytar, &header, FILE_HEADER_SIZE) != FILE_HEADER_SIZE)
+      return E_DESCO;
+
+   int file_size = strtol(header.size, NULL, 8);
+   char data_buff[file_size];
+
+   int fd_output = creat(header.name, 0600);
+   if(fd_output == -1)
+   {
+      close(fd_output);
+      return E_CREATDEST;  
+   } 
+   
+   int rd = read(fd_mytar, data_buff, file_size);
+   if (rd == -1)
+   {
+      close(fd_output);
+      return E_DESCO;
+   }
+   if (rd < file_size)
+   {
+      close(fd_output);
+      return E_TARFORM;
+   }
+      
+   if(write(fd_output, data_buff, file_size) < file_size) 
+   { 
+      close(fd_output);
+      return E_DESCO;
+   }
+
+   close(fd_output);
+   return 0;
 }
 
-int search_file (int fd_mytar, char * f_dat){
+/** 
+ * Searches for a file in the tar archive, and leaves the file offset at the beginning of the header
+ * @param fd_mytar File descriptor of the tar archive
+ * @param f_dat Name of the file to search
+ * @return 0 if the file is found. Otherwise it returns the error code.
+ */
+int search_file (int fd_mytar, char * f_dat) {
 
-   char header_buffer[FILE_HEADER_SIZE];
+   struct c_header_gnu_tar header;
 
-    while (1)
-    {   
-        // Read the header
-        int read_size = read(fd_mytar, header_buffer, FILE_HEADER_SIZE);
-        if (read_size == -1) return E_OPEN2;
-        if (read_size != DATAFILE_BLOCK_SIZE) return E_TARFORM;
-        
-        // Check if the header has the name of the file to extract
-        struct c_header_gnu_tar * header = (struct c_header_gnu_tar *) header_buffer;
-        if (strcmp(header->name, f_dat) == 0) {
-            lseek(fd_mytar, -FILE_HEADER_SIZE, SEEK_CUR);
-            extract_file(fd_mytar, header);
-            break;
-        }
+   while (1)
+   {
+      // Read the header
+      int read_size = read(fd_mytar, &header, FILE_HEADER_SIZE);
+      if (read_size == -1) return E_DESCO;
+      if (read_size != DATAFILE_BLOCK_SIZE) return E_TARFORM;
 
-        // Get the size of the file and advance to the next header
-        int file_size = strtol(header->size, NULL, 8);
-        int offset = file_size + (DATAFILE_BLOCK_SIZE - (file_size % DATAFILE_BLOCK_SIZE));
-        lseek(fd_mytar, offset, SEEK_CUR);
-    }
-    return 0;
+      // If this is not a tar file header
+      if (memcmp(header.magic, "ustar ", 6) != 0)
+      {
+         if (!is_empty(&header)) return E_TARFORM; // Invalid tar file
+         return E_NOEXIST; // End of the tar archive
+      }
+
+      // Check if the header has the name of the file to extract
+      if (strcmp(header.name, f_dat) == 0)
+      {
+         lseek(fd_mytar, -FILE_HEADER_SIZE, SEEK_CUR);
+         return 0;
+      }
+
+      // Get the size of the file and advance to the next header
+      int file_size = strtol(header.size, NULL, 8);
+      int offset = file_size + (DATAFILE_BLOCK_SIZE - (file_size % DATAFILE_BLOCK_SIZE));
+      lseek(fd_mytar, offset, SEEK_CUR);
+   }
 }
