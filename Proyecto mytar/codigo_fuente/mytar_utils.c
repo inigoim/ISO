@@ -16,6 +16,8 @@
 #include <string.h>
 #include <stdlib.h>
 #include <stdbool.h>
+#include <sys/types.h>
+#include <dirent.h>
 
 #include "s_mytarheader.h"
 
@@ -288,7 +290,7 @@ int tar_complete_archive (int fd_mytar) {
    return 0;
 }
 
-tar_insert_contents(int fd_mytar, const char *f_dir);
+int tar_insert_contents(int fd_mytar, const char *f_dir);
 
 /**
 * Inserts a file in the tar archive (current offset)
@@ -299,7 +301,6 @@ tar_insert_contents(int fd_mytar, const char *f_dir);
 int tar_insert_file (int fd_mytar, const char *f_dat) {
    struct c_header_gnu_tar tar_header;
    if (BuilTarHeader(f_dat, &tar_header) != HEADER_OK) return E_OPEN1;
-   if (tar_header.typeflag == '5') tar_insert_contents(fd_mytar, *f_dat);
    
    // Write the header and the data
    if (write(fd_mytar, &tar_header, FILE_HEADER_SIZE) != FILE_HEADER_SIZE)
@@ -307,16 +308,44 @@ int tar_insert_file (int fd_mytar, const char *f_dat) {
    int fd_dat = open(f_dat, O_RDONLY);
    if (WriteFileDataBlocks(fd_dat, fd_mytar) < 0)
       return E_DESCO;
+
+   // If the file is a directory, insert its contents
+   if (tar_header.typeflag[0] == '5') {
+      int res = tar_insert_contents(fd_mytar, f_dat);
+      if (res < 0) return res;
+   }
+   
    close(fd_dat);
+   return 0;
 }
 
 /**
  * Inserts all the files found inside the directory into the tar archive
- * @param fd_mytar File descriptor of the tar archive, the files with be inserted after the current offset
+ * @param fd_mytar File descriptor of the tar archive, the files will be inserted after the current offset
  * @param f_dir Directory from which to read files
+ * @return 0 if the files were inserted successfully, an error code otherwise
  */
-tar_insert_contents(int fd_mytar, const char *f_dir) {
-   // TODO
+int tar_insert_contents(int fd_mytar, const char *f_dir) {
+   DIR *dirp;
+   struct dirent *diren;
+   char filepath[100];
+
+   dirp = opendir(f_dir);
+   while ((diren = readdir(dirp)) != NULL) {
+      if (strcmp(diren->d_name, ".") == 0 || strcmp(diren->d_name, "..") == 0)
+         continue;
+
+      if (strlen(diren->d_name) + 1 + strlen(f_dir) >= sizeof(filepath))
+         return E_DESCO;
+
+      sprintf(filepath, "%s/%s", f_dir, diren->d_name);
+      
+      int res = tar_insert_file(fd_mytar, filepath);
+      if (res < 0) return res;
+   }
+
+   closedir(dirp);
+   return 0;
 }
 
 /**
