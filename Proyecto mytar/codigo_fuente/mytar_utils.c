@@ -31,7 +31,7 @@ char * getGroupName(gid_t gid) {
 }
 
 // Return Mode type entry  (tar Mode type)
-char mode_tar( mode_t Mode) {
+char mode_tar(mode_t Mode) {
    if  (S_ISREG(Mode))   return  '0';
    if  (S_ISLNK(Mode))   return  '2';
    if  (S_ISCHR(Mode))   return  '3';
@@ -65,10 +65,13 @@ int BuilTarHeader(const char *FileName, struct c_header_gnu_tar *pTarHeader) {
    printf("st_mode del archivo %s %07o\n",FileName, stat_file.st_mode & 07777); // Only  the least significant 12 bits
    sprintf(pTarHeader->uid, "%07o", stat_file.st_uid);
    sprintf(pTarHeader->gid, "%07o", stat_file.st_gid);
-   sprintf(pTarHeader->size, "%011lo", stat_file.st_size);
    sprintf(pTarHeader->mtime, "%011lo", stat_file.st_mtime);
 
    pTarHeader->typeflag[0] = mode_tar(stat_file.st_mode);
+   if (pTarHeader->typeflag[0] == '5')
+      sprintf(pTarHeader->size, "%011lo", 0);
+   else
+      sprintf(pTarHeader->size, "%011lo", stat_file.st_size);
 
     //  linkname
    if (S_ISLNK(stat_file.st_mode))
@@ -285,6 +288,8 @@ int tar_complete_archive (int fd_mytar) {
    return 0;
 }
 
+tar_insert_contents(int fd_mytar, const char *f_dir);
+
 /**
 * Inserts a file in the tar archive (current offset)
 * @param fd_mytar File descriptor of the tar archive
@@ -294,6 +299,7 @@ int tar_complete_archive (int fd_mytar) {
 int tar_insert_file (int fd_mytar, const char *f_dat) {
    struct c_header_gnu_tar tar_header;
    if (BuilTarHeader(f_dat, &tar_header) != HEADER_OK) return E_OPEN1;
+   if (tar_header.typeflag == '5') tar_insert_contents(fd_mytar, *f_dat);
    
    // Write the header and the data
    if (write(fd_mytar, &tar_header, FILE_HEADER_SIZE) != FILE_HEADER_SIZE)
@@ -302,6 +308,15 @@ int tar_insert_file (int fd_mytar, const char *f_dat) {
    if (WriteFileDataBlocks(fd_dat, fd_mytar) < 0)
       return E_DESCO;
    close(fd_dat);
+}
+
+/**
+ * Inserts all the files found inside the directory into the tar archive
+ * @param fd_mytar File descriptor of the tar archive, the files with be inserted after the current offset
+ * @param f_dir Directory from which to read files
+ */
+tar_insert_contents(int fd_mytar, const char *f_dir) {
+   // TODO
 }
 
 /**
