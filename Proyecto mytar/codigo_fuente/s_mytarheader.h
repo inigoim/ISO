@@ -84,8 +84,11 @@
 #define E_TARFORM -3
 // f_mytar no contiene el fichero de nombre f_dat
 #define E_NOEXIST -2
-// No se puede crear/extraer el fichero f_dat
+/* No se puede crear/extraer el fichero f_dat
+   No se puede crear el directorio f_dat  o alguno de los ficheros contenidos dentro*/
 #define E_CREATDEST -4
+// No se puede crear el directorio indicado en (index)
+#define E_DIR1 -5
 // Otro tipo de errores
 #define E_DESCO -99
 
