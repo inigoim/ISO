@@ -43,13 +43,12 @@ int inserta_fichero(const char * f_mytar, const char * f_dat) {
 
     // Seek the postion where the next file should be inserted
     if (stat_mytar.st_size != 0) {
-        file_number = seek_end_of_files(fd_mytar);
-        if (file_number < 0) {
+        res = seek_end_of_files(fd_mytar);
+        if (res < 0) {
             close(fd_mytar);
-            return file_number;
+            return res;
         }
     }
-    else file_number = 1;
         
 
     // Insert the file and complete the archive
@@ -58,6 +57,8 @@ int inserta_fichero(const char * f_mytar, const char * f_dat) {
         close(fd_mytar);
         return res;
     }
+    file_number = res;
+
     res = tar_complete_archive(fd_mytar);
     if (res < 0) {
         close(fd_mytar);

@@ -22,6 +22,10 @@
 #include "s_mytarheader.h"
 
 
+// Index of the last processed file in the tar (read or written)
+int file_number = 0;
+
+
 // Return UserName (string) from uid (integer). See man 2 stat and man getpwuid
 char * getUserName(uid_t uid) {
    return getpwuid(uid)->pw_name;
@@ -205,13 +209,11 @@ bool is_empty (struct c_header_gnu_tar header) {
  * Moves the file descriptor offset to the block
  * after the last file in the tar archive
  * @param fd_mytar File descriptor of the tar archive
- * @return 0 if the end of the archive was found, an error code otherwise
+ * @return The index of the last file in the archive if successful, an error code otherwise
  */
 int seek_end_of_files(int fd_mytar) {
-   int file_number;
    struct c_header_gnu_tar header;
 
-   file_number = 1;
 
    while (1)
    {
@@ -222,7 +224,10 @@ int seek_end_of_files(int fd_mytar) {
       
       // Check if the header is valid
       if (memcmp(header.magic, "ustar ", 6) != 0) {
-         if (is_empty(header)) break; // This is where the new file should go
+         if (is_empty(header)) {
+            lseek (fd_mytar, -DATAFILE_BLOCK_SIZE, SEEK_CUR);
+            break; // This is where the new file should go
+         }
          else return E_TARFORM;
       }
 
@@ -233,7 +238,7 @@ int seek_end_of_files(int fd_mytar) {
 
       file_number++;
    }
-   lseek (fd_mytar, -DATAFILE_BLOCK_SIZE, SEEK_CUR);
+   
    return file_number;
 }
 
@@ -241,7 +246,7 @@ int seek_end_of_files(int fd_mytar) {
  * Searches for a file in the tar archive, and leaves the file offset at the beginning of the header
  * @param fd_mytar File descriptor of the tar archive
  * @param f_dat Name of the file to search
- * @return 0 if the file is found. Otherwise it returns the error code.
+ * @return The index of the file before the searched file if the file was found, an error code otherwise
  */
 int search_file (int fd_mytar, const char * f_dat) {
 
@@ -265,14 +270,18 @@ int search_file (int fd_mytar, const char * f_dat) {
       if (strcmp(header.name, f_dat) == 0)
       {
          lseek(fd_mytar, -FILE_HEADER_SIZE, SEEK_CUR);
-         return 0;
+         break;
       }
 
       // Get the size of the file and advance to the next header
       int file_size = strtol(header.size, NULL, 8);
       int offset = file_size + (DATAFILE_BLOCK_SIZE - (file_size % DATAFILE_BLOCK_SIZE));
       lseek(fd_mytar, offset, SEEK_CUR);
+
+      file_number++;
    }
+   
+   return file_number;
 }
 
 // ------------------------------------------------------------------------- //
@@ -296,7 +305,7 @@ int tar_insert_contents(int fd_mytar, const char *f_dir);
 * Inserts a file in the tar archive (current offset)
 * @param fd_mytar File descriptor of the tar archive
 * @param f_dat File to insert in the tar archive
-* @return 0 if the file was inserted successfully, an error code otherwise
+* @return The index of the inserted file in the archive if successful, an error code otherwise
 */
 int tar_insert_file (int fd_mytar, const char *f_dat) {
    struct c_header_gnu_tar tar_header;
@@ -308,6 +317,7 @@ int tar_insert_file (int fd_mytar, const char *f_dat) {
    int fd_dat = open(f_dat, O_RDONLY);
    if (WriteFileDataBlocks(fd_dat, fd_mytar) < 0)
       return E_DESCO;
+   file_number++;
 
    // If the file is a directory, insert its contents
    if (tar_header.typeflag[0] == '5') {
@@ -316,7 +326,7 @@ int tar_insert_file (int fd_mytar, const char *f_dat) {
    }
    
    close(fd_dat);
-   return 0;
+   return file_number;
 }
 
 /**
@@ -338,7 +348,10 @@ int tar_insert_contents(int fd_mytar, const char *f_dir) {
       if (strlen(diren->d_name) + 1 + strlen(f_dir) >= sizeof(filepath))
          return E_DESCO;
 
-      sprintf(filepath, "%s/%s", f_dir, diren->d_name);
+      if (f_dir[strlen(f_dir) - 1] == '/')
+         sprintf(filepath, "%s%s", f_dir, diren->d_name);
+      else
+         sprintf(filepath, "%s/%s", f_dir, diren->d_name);
       
       int res = tar_insert_file(fd_mytar, filepath);
       if (res < 0) return res;
@@ -352,7 +365,7 @@ int tar_insert_contents(int fd_mytar, const char *f_dir) {
 * Extract the file from a tar archive
 * (the file descriptor offset has to be at the beginning of the file header)
 * @param fd_mytar file descriptor of the tar archive
-* @return 0 if the file is correctly extracted, an error code otherwise
+* @return The index of the extracted file if successful, an error code otherwise
 */
 int tar_extract_file(int fd_mytar) {
    struct c_header_gnu_tar header;
@@ -382,6 +395,7 @@ int tar_extract_file(int fd_mytar) {
       close(fd_output);
       return E_TARFORM;
    }
+   file_number++;
       
    if(write(fd_output, data_buff, file_size) < file_size) 
    { 
@@ -390,5 +404,5 @@ int tar_extract_file(int fd_mytar) {
    }
 
    close(fd_output);
-   return 0;
+   return file_number;
 }
