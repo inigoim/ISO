@@ -233,6 +233,7 @@ int seek_end_of_files(int fd_mytar) {
 
       // Get the size of the file and advance to the next header
       int file_size = strtol(header.size, NULL, 8);
+      if (file_size == 0) continue;
       int offset = file_size + (DATAFILE_BLOCK_SIZE - (file_size % DATAFILE_BLOCK_SIZE));
       lseek(fd_mytar, offset, SEEK_CUR);
 
@@ -315,15 +316,27 @@ int tar_insert_file (int fd_mytar, const char *f_dat) {
    if (write(fd_mytar, &tar_header, FILE_HEADER_SIZE) != FILE_HEADER_SIZE)
       return E_DESCO;
    int fd_dat = open(f_dat, O_RDONLY);
-   if (WriteFileDataBlocks(fd_dat, fd_mytar) < 0)
-      return E_DESCO;
-   file_number++;
 
-   // If the file is a directory, insert its contents
-   if (tar_header.typeflag[0] == '5') {
-      int res = tar_insert_contents(fd_mytar, f_dat);
-      if (res < 0) return res;
+   // Write the file data
+   switch (tar_header.typeflag[0]) {
+   case '0':
+      if (WriteFileDataBlocks(fd_dat, fd_mytar) < 0)
+         return E_DESCO;
+      break;
+
+   case '5':
+      if (tar_header.typeflag[0] == '5') {
+         int res = tar_insert_contents(fd_mytar, f_dat);
+         if (res < 0) return res;
+      }
+      break;
+
+   default:
+      fprintf(stderr, "Error: Unhandled file type\n");
+      break;
    }
+   
+   file_number++;
    
    close(fd_dat);
    return file_number;
