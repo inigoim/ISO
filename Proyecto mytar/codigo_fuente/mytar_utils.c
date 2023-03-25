@@ -18,6 +18,7 @@
 #include <stdbool.h>
 #include <sys/types.h>
 #include <dirent.h>
+#include <errno.h>
 
 #include "s_mytarheader.h"
 
@@ -276,6 +277,7 @@ int search_file (int fd_mytar, const char * f_dat) {
 
       // Get the size of the file and advance to the next header
       int file_size = strtol(header.size, NULL, 8);
+      if (file_size == 0) continue;
       int offset = file_size + (DATAFILE_BLOCK_SIZE - (file_size % DATAFILE_BLOCK_SIZE));
       lseek(fd_mytar, offset, SEEK_CUR);
 
@@ -310,6 +312,7 @@ int tar_insert_contents(int fd_mytar, const char *f_dir);
 */
 int tar_insert_file (int fd_mytar, const char *f_dat) {
    struct c_header_gnu_tar tar_header;
+   int res;
    if (BuilTarHeader(f_dat, &tar_header) != HEADER_OK) return E_OPEN1;
    
    // Write the header and the data
@@ -319,20 +322,18 @@ int tar_insert_file (int fd_mytar, const char *f_dat) {
 
    // Write the file data
    switch (tar_header.typeflag[0]) {
-   case '0':
+   case '0': // Regular file
       if (WriteFileDataBlocks(fd_dat, fd_mytar) < 0)
          return E_DESCO;
       break;
 
-   case '5':
-      if (tar_header.typeflag[0] == '5') {
-         int res = tar_insert_contents(fd_mytar, f_dat);
-         if (res < 0) return res;
-      }
+   case '5': // Directory
+      res = tar_insert_contents(fd_mytar, f_dat);
+      if (res < 0) return res;
       break;
 
    default:
-      fprintf(stderr, "Error: Unhandled file type\n");
+      fprintf(stderr, "tar_insert_file error: Unhandled file type\n");
       break;
    }
    
@@ -374,48 +375,127 @@ int tar_insert_contents(int fd_mytar, const char *f_dir) {
    return 0;
 }
 
+
 /**
-* Extract the file from a tar archive
-* (the file descriptor offset has to be at the beginning of the file header)
-* @param fd_mytar file descriptor of the tar archive
-* @return The index of the extracted file if successful, an error code otherwise
+ * Makes the required directories to extract a file
+ * @param f_dat Path of the file that will be extracted
+ * @return 0 if the directories were created successfully, an error code otherwise
 */
-int tar_extract_file(int fd_mytar) {
-   struct c_header_gnu_tar header;
+int create_required_path(const char *f_dat) {
+   char *path, *sep;
+   path = strdup(f_dat);
+   sep = strchr(path, '/');
+
+   while (sep != NULL) {
+      int current_length = sep - path;
+      char current[current_length + 1];
+      memcpy(current, path, current_length);
+      current[current_length] = '\0';
+
+      if (access(current, (R_OK | W_OK | X_OK)) == -1) {
+         switch (errno) {
+         case ENOENT:
+            if (mkdir(current, 0700) == -1) return E_CREATDEST;
+            break;
+
+         case EACCES:
+            return E_CREATDEST;
+            break;
+         
+         default:
+            return E_DESCO;
+            break;
+         }
+      }
+      
+      sep = strchr(sep + 1, '/');
+   }
 
 
-   if (read(fd_mytar, &header, FILE_HEADER_SIZE) != FILE_HEADER_SIZE)
-      return E_DESCO;
-
-   int file_size = strtol(header.size, NULL, 8);
-   char data_buff[file_size];
-
-   int fd_output = creat(header.name, 0600);
-   if(fd_output == -1)
-   {
+   free(path);
+   return 0;
+}
+/**
+ * Helper function for tar_extract_file, it handles regular files
+ * @param fd_mytar File descriptor of the tar archive
+ * @param pheader Pointer to the header of the file to extract
+ * @return 0 if the file was extracted successfully, an error code otherwise
+ */
+int tar_extract_regular_file(int fd_mytar, struct c_header_gnu_tar *pheader) {
+   int fd_output = creat(pheader->name, 0600);
+   if (fd_output == -1) {
       close(fd_output);
       return E_CREATDEST;  
    } 
    
+   int file_size = strtol(pheader->size, NULL, 8);
+   char data_buff[file_size];
    int rd = read(fd_mytar, data_buff, file_size);
-   if (rd == -1)
-   {
+   if (rd == -1) {
       close(fd_output);
       return E_DESCO;
    }
-   if (rd < file_size)
-   {
+   if (rd < file_size) {
       close(fd_output);
       return E_TARFORM;
    }
-   file_number++;
       
-   if(write(fd_output, data_buff, file_size) < file_size) 
-   { 
+   if(write(fd_output, data_buff, file_size) < file_size) { 
       close(fd_output);
       return E_DESCO;
    }
 
    close(fd_output);
-   return file_number;
+   return 0;
+}
+
+/**
+ * Helper function for tar_extract_file, it handles directories
+ * @param fd_mytar File descriptor of the tar archive
+ * @param pheader Pointer to the header of the directory to extract
+ * @return 0 if the directory was created successfully, an error code otherwise
+ */
+int tar_extract_directory(int fd_mytar, struct c_header_gnu_tar *pheader) {
+   int res = mkdir(pheader->name, 0700);
+   if (res == -1 && errno != EEXIST) return E_CREATDEST;
+
+   return 0;
+}
+
+/**
+* Extract the file from a tar archive
+* (the file descriptor offset has to be at the beginning of the file header)
+* @param fd_mytar file descriptor of the tar archive
+* @return 0 if successful, an error code otherwise
+*/
+int tar_extract_file(int fd_mytar) {
+   struct c_header_gnu_tar header;
+   int res;
+
+   
+   if (read(fd_mytar, &header, FILE_HEADER_SIZE) != FILE_HEADER_SIZE)
+      return E_DESCO;
+   
+   res = create_required_path(header.name);
+   if (res < 0) return res;
+   
+   switch (header.typeflag[0]) {
+   case '0': // Regular file
+      res = tar_extract_regular_file(fd_mytar, &header);
+      if (res < 0) return res;
+      break;
+
+   case '5': // Directory
+      res = tar_extract_directory(fd_mytar, &header);
+      if (res < 0) return res;
+      break;
+
+   default:
+      fprintf(stderr, "tar_extract_file Error: Unhandled file type\n");
+      break;
+   }
+
+   file_number++;
+   
+   return 0;
 }
