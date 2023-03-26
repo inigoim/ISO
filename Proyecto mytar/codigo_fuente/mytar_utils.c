@@ -65,7 +65,7 @@ int BuilTarHeader(const char *FileName, struct c_header_gnu_tar *pTarHeader) {
 
    memset(pTarHeader, 0, sizeof(struct c_header_gnu_tar));
 
-   if (stat (FileName, &stat_file) == -1)  return HEADER_ERR;
+   if (lstat(FileName, &stat_file) == -1)  return HEADER_ERR;
 
    strcpy(pTarHeader->name, FileName);
    sprintf(pTarHeader->mode, "%07o", stat_file.st_mode & 07777);  // Only  the least significant 12 bits
@@ -328,6 +328,10 @@ int tar_insert_file (int fd_mytar, const char *f_dat) {
       if (WriteFileDataBlocks(fd_dat, fd_mytar) < 0)
          return E_DESCO;
       break;
+   
+   case '2': // Symbolic link
+      // Nothing to do
+      break;
 
    case '5': // Directory
       res = tar_insert_contents(fd_mytar, f_dat);
@@ -485,6 +489,10 @@ int tar_extract_file(int fd_mytar) {
    case '0': // Regular file
       res = tar_extract_regular_file(fd_mytar, &header);
       if (res < 0) return res;
+      break;
+
+   case '2':
+      if (symlink(header.linkname, header.name) == -1) return E_CREATDEST;
       break;
 
    case '5': // Directory
