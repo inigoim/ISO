@@ -234,9 +234,10 @@ int seek_end_of_files(int fd_mytar) {
 
       // Get the size of the file and advance to the next header
       int file_size = strtol(header.size, NULL, 8);
-      if (file_size == 0) continue;
+      if (file_size != 0) {
       int offset = file_size + (DATAFILE_BLOCK_SIZE - (file_size % DATAFILE_BLOCK_SIZE));
       lseek(fd_mytar, offset, SEEK_CUR);
+      }
 
       file_number++;
    }
@@ -277,9 +278,10 @@ int search_file (int fd_mytar, const char * f_dat) {
 
       // Get the size of the file and advance to the next header
       int file_size = strtol(header.size, NULL, 8);
-      if (file_size == 0) continue;
+      if (file_size != 0) {
       int offset = file_size + (DATAFILE_BLOCK_SIZE - (file_size % DATAFILE_BLOCK_SIZE));
       lseek(fd_mytar, offset, SEEK_CUR);
+      }
 
       file_number++;
    }
