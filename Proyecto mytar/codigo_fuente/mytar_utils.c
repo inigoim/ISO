@@ -401,11 +401,11 @@ int create_required_path(const char *f_dat) {
       if (access(current, (R_OK | W_OK | X_OK)) == -1) {
          switch (errno) {
          case ENOENT:
-            if (mkdir(current, 0700) == -1) return E_CREATDEST;
+            if (mkdir(current, 0700) == -1) return E_DIR1;
             break;
 
          case EACCES:
-            return E_CREATDEST;
+            return E_DIR1;
             break;
          
          default:
